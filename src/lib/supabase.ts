@@ -43,7 +43,8 @@ const safeFetch = async <T>(
     const normalized = transform ? result.map(transform) : (result as T[]);
     writeLocal(localKey, normalized);
     return normalized;
-  } catch {
+  } catch (err: any) {
+    alert(`Gagal memuat ${table} dari Supabase: ${err?.message || err}`);
     return readLocal(localKey, [] as T[]);
   }
 };
@@ -63,15 +64,19 @@ const safeInsert = async <T>(
   }
 
   try {
-    const { data, error } = await supabase.from(table).insert([dbRow]);
-    if (error) throw error;
+    const { data, error } = await supabase.from(table).insert([dbRow]).select();
+    if (error) {
+      alert("Gagal menyimpan ke Supabase: " + error.message);
+      throw error;
+    }
     const inserted = (data as any[] | null)?.[0] ?? localRow;
     const normalized = transform ? transform(inserted) : (inserted as T);
     const current = readLocal(localKey, [] as T[]);
     const next = [normalized, ...current];
     writeLocal(localKey, next);
     return normalized;
-  } catch {
+  } catch (err: any) {
+    alert("Supabase insert gagal: " + (err?.message || err));
     const current = readLocal(localKey, [] as T[]);
     const next = [localRow, ...current];
     writeLocal(localKey, next);
@@ -284,13 +289,29 @@ export const addExpense = async (expense: any) => {
     category: expense.category,
     payload: expense,
   };
-  return safeInsert("expenses", dbExpense, expense, "lavora_expenses", mapExpense);
+  if (!HAS_SUPABASE) {
+    return safeInsert("expenses", dbExpense, expense, "lavora_expenses", mapExpense);
+  }
+
+  try {
+    const { data, error } = await supabase.from("expenses").insert([dbExpense]).select();
+    if (error) throw error;
+    const inserted = (data as any[] | null)?.[0] ?? dbExpense;
+    const normalized = mapExpense(inserted);
+    const current = readLocal("lavora_expenses", [] as any[]);
+    const next = [normalized, ...current];
+    writeLocal("lavora_expenses", next);
+    return normalized;
+  } catch (err: any) {
+    alert("Gagal menyimpan pengeluaran ke Supabase: " + (err?.message || err));
+    return safeInsert("expenses", dbExpense, expense, "lavora_expenses", mapExpense);
+  }
 };
 
 export const fetchEmployees = async () =>
   safeFetch<any>(
-    "users",
-    async client => client.from("users").select("*").order("name", { ascending: true }),
+    "employees",
+    async client => client.from("employees").select("*").order("name", { ascending: true }),
     "lavora_employees",
     mapUser
   );
@@ -304,7 +325,23 @@ export const createEmployee = async (employee: any) => {
     role: employee.role || "employee",
     payload: employee,
   };
-  return safeInsert("users", dbEmployee, employee, "lavora_employees", mapUser);
+  if (!HAS_SUPABASE) {
+    return safeInsert("employees", dbEmployee, employee, "lavora_employees", mapUser);
+  }
+
+  try {
+    const { data, error } = await supabase.from("employees").insert([dbEmployee]).select();
+    if (error) throw error;
+    const inserted = (data as any[] | null)?.[0] ?? dbEmployee;
+    const normalized = mapUser(inserted);
+    const current = readLocal("lavora_employees", [] as any[]);
+    const next = [normalized, ...current];
+    writeLocal("lavora_employees", next);
+    return normalized;
+  } catch (err: any) {
+    alert("Gagal menyimpan karyawan ke Supabase: " + (err?.message || err));
+    throw err;
+  }
 };
 
 export const deleteEmployee = async (id: string) => {
@@ -316,7 +353,7 @@ export const deleteEmployee = async (id: string) => {
   }
 
   try {
-    const { error } = await supabase.from("users").delete().eq("id", id);
+    const { error } = await supabase.from("employees").delete().eq("id", id);
     if (error) throw error;
     const current = readLocal("lavora_employees", [] as any[]);
     const next = current.filter(emp => emp.id !== id);

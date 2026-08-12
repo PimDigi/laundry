@@ -60,11 +60,14 @@ export default function KelolaKaryawan() {
       role: "employee",
       createdAt: new Date().toISOString()
     };
-
-    const saved = await createEmployee(newEmployee);
-    setEmployees(prev => [saved, ...prev]);
-    setForm({ name: "", email: "", password: "" });
-    setShowForm(false);
+    try {
+      await createEmployee(newEmployee);
+      await loadEmployees();
+      setForm({ name: "", email: "", password: "" });
+      setShowForm(false);
+    } catch (error: any) {
+      alert("Gagal menyimpan karyawan: " + (error?.message || error));
+    }
   };
 
   const handleDelete = async (id: string) => {

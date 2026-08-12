@@ -4,7 +4,7 @@ import { Check, ChevronRight, Minus, Plus, User, X, Printer, MessageCircle, Shir
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { generatePrintLogoPayload } from "@/utils/escpos";
-import { addOrder, updateMember } from "@/lib/supabase";
+import { addOrder, updateMember, fetchMembers } from "@/lib/supabase";
 
 const getCategoryIcon = (category: string) => {
   const cat = category.toLowerCase();
@@ -149,9 +149,22 @@ export default function Kasir() {
     }
     document.addEventListener("mousedown", handleClickOutside);
     
-    // Memberships
-    const savedMemberships = localStorage.getItem('lavora_memberships');
-    if (savedMemberships) setMemberships(JSON.parse(savedMemberships));
+    // Memberships: try remote first, fallback to local
+    (async () => {
+      try {
+        const remoteMembers = await fetchMembers();
+        if (remoteMembers && remoteMembers.length > 0) {
+          setMemberships(remoteMembers);
+          localStorage.setItem('lavora_memberships', JSON.stringify(remoteMembers));
+        } else {
+          const savedMemberships = localStorage.getItem('lavora_memberships');
+          if (savedMemberships) setMemberships(JSON.parse(savedMemberships));
+        }
+      } catch {
+        const savedMemberships = localStorage.getItem('lavora_memberships');
+        if (savedMemberships) setMemberships(JSON.parse(savedMemberships));
+      }
+    })();
 
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
@@ -165,17 +178,19 @@ export default function Kasir() {
     }, {});
 
   const combinedCustomers = [
-    ...memberships.map(m => ({ ...m, isMember: true })),
-    ...customers.map(c => ({ ...c, isMember: false }))
+    ...memberships.map(m => ({ ...m, phone: m.phone || "", isMember: true })),
+    ...customers.map(c => ({ ...c, phone: c.phone || "", isMember: false }))
   ].filter((v, i, a) => a.findIndex(t => (t.phone === v.phone)) === i);
 
   const searchNameStr = customerName.toLowerCase();
   const searchPhoneStr = customerPhone.toLowerCase();
   const searchStr = searchNameStr || searchPhoneStr; // Use whichever has value
   
-  const filteredCustomers = combinedCustomers.filter(c => 
-    (c.name.toLowerCase().includes(searchStr) || c.phone.includes(searchStr)) && searchStr.length > 0
-  );
+  const filteredCustomers = combinedCustomers.filter(c => {
+    const name = (c.name || "").toLowerCase();
+    const phone = String(c.phone || "").toLowerCase();
+    return searchStr.length > 0 && (name.includes(searchStr) || phone.includes(searchStr));
+  });
 
   const handleCardClick = (service: any) => {
     if (service.unit === 'm²') {
@@ -867,8 +882,8 @@ Salam, ${laundryName}${customFooter}`;
   };
 
   const handleSelectCustomer = (customer: any) => {
-    setCustomerName(customer.name);
-    setCustomerPhone(customer.phone);
+    setCustomerName(customer.name || "");
+    setCustomerPhone(customer.phone || "");
     setShowSuggestions(false);
   };
 
