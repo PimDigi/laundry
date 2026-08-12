@@ -342,7 +342,7 @@ export default function Dashboard() {
       if (opStatus === 'Dibatalkan') return;
 
       const isTodayOrder = isToday(order.createdAt || order.date);
-      let orderRevenue = Number(order.price) || 0;
+      const orderRevenue = Number(order.final_amount ?? order.total_amount ?? order.payload?.total_amount ?? order.price ?? 0) || 0;
 
       if (isTodayOrder) {
         omzetHariIni += orderRevenue;

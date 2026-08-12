@@ -445,9 +445,12 @@ export default function Kasir() {
       operationalStatus: "Diterima",
       service: Object.keys(cart).map(id => services.find(s => s.id === id)?.name).join(", "),
       qty: `${totalItems} Item`,
-      price: totalPrice,
+      // amounts
       subtotal: subtotalPrice,
+      total_amount: subtotalPrice,
       discount: discountAmount > 0 ? discountAmount : 0,
+      final_amount: totalPrice,
+      price: totalPrice,
       notes: orderNotes,
       paymentStatus,
       dpAmount: paymentStatus === 'DP' ? (parseInt(dpAmount.replace(/\D/g, '')) || 0) : 0,

@@ -114,6 +114,7 @@ function RiwayatContent() {
       ) : (
         <div className="flex flex-col gap-3 pb-20 overflow-y-auto">
           {orders.map((order, idx) => {
+            const displayAmount = Number(order.final_amount ?? order.total_amount ?? order.payload?.total_amount ?? order.price ?? 0);
             const opStatus = order.operationalStatus || (order.status === 'Baru' ? 'Diterima' : order.status) || 'Diterima';
             const isLunas = order.paymentStatus === 'Lunas';
             const isExpress = order.service?.toLowerCase().includes('express') || order.service?.toLowerCase().includes('kilat') || order.service?.toLowerCase().includes('24 jam');
@@ -131,7 +132,7 @@ function RiwayatContent() {
                 <div className="flex justify-between items-center px-4 py-2 bg-slate-50 border-b border-slate-100">
                   <span className="text-xs font-bold text-slate-600">{order.id}</span>
                   <div className="bg-blue-100 px-3 py-1 rounded-full">
-                    <span className="text-xs font-bold text-blue-700">Rp {order.price?.toLocaleString('id-ID')}</span>
+                    <span className="text-xs font-bold text-blue-700">Rp {displayAmount.toLocaleString('id-ID')}</span>
                   </div>
                 </div>
                 

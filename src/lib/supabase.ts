@@ -198,9 +198,12 @@ export const addOrder = async (order: any) => {
     subtotal: order.subtotal ?? order.price ?? 0,
     discount: order.discount ?? 0,
     total: order.price ?? order.totalPrice ?? 0,
+    total_amount: order.total_amount ?? order.totalAmount ?? order.subtotal ?? order.totalPrice ?? order.price ?? 0,
+    final_amount: order.final_amount ?? order.finalAmount ?? order.price ?? order.totalPrice ?? 0,
     service_type: order.service || order.serviceType || "",
     unit: order.unit || "",
     weight_qty: Number.isNaN(weightQtyNumber) ? 0 : weightQtyNumber,
+    payload: order,
   };
 
   if (!HAS_SUPABASE) {
