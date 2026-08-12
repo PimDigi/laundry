@@ -25,7 +25,10 @@ export default function Dashboard() {
     tunaiAllTime: 0,
     qrisAllTime: 0,
     pengeluaran: 0,
-    pengeluaranAkumulasi: 0
+    pengeluaranAkumulasi: 0,
+    totalKasHariIni: 0,
+    totalKasBulanIni: 0,
+    totalKasAllTime: 0
   });
 
   const [summary, setSummary] = useState({
@@ -109,6 +112,9 @@ export default function Dashboard() {
     let totalQrisBulanIni = 0;
     let totalTunaiAllTime = 0;
     let totalQrisAllTime = 0;
+    let totalKasHariIni = 0;
+    let totalKasBulanIni = 0;
+    let totalKasAllTime = 0;
     
     let countH0 = 0;
     let countH1 = 0;
@@ -120,6 +126,11 @@ export default function Dashboard() {
     let txCount = 0;
     let kgSum = 0;
     let pcsSum = 0;
+
+    const normalizePaymentMethod = (value: any) => {
+      if (!value) return "";
+      return String(value).toLowerCase();
+    };
 
     const isToday = (dateString: string | number) => {
       if (!dateString) return false;
@@ -133,6 +144,33 @@ export default function Dashboard() {
       const itemDate = new Date(dateString);
       const todayDate = new Date();
       return itemDate.getMonth() === todayDate.getMonth() && itemDate.getFullYear() === todayDate.getFullYear();
+    };
+
+    const getOrderPaymentAmounts = (order: any) => {
+      const paymentMethod = normalizePaymentMethod(order.paymentMethod);
+      const pelunasanMethod = normalizePaymentMethod(order.pelunasanMethod);
+      let cashAmount = 0;
+      let qrisAmount = 0;
+
+      const addAmount = (method: string, amount: number) => {
+        if (amount <= 0) return;
+        if (method === 'tunai' || method === 'cash') cashAmount += amount;
+        if (method === 'qris' || method === 'transfer') qrisAmount += amount;
+      };
+
+      if (order.paymentStatus === 'Lunas') {
+        if (order.pelunasanAmount) {
+          const firstPayment = Number(order.amountPaid || (order.paymentStatusWasBelum ? 0 : order.price / 2) || 0);
+          addAmount(paymentMethod, firstPayment);
+          addAmount(pelunasanMethod, Number(order.pelunasanAmount || 0));
+        } else {
+          addAmount(paymentMethod, Number(order.price || 0));
+        }
+      } else if (order.paymentStatus === 'DP') {
+        addAmount(paymentMethod, Number(order.amountPaid || (order.price / 2) || 0));
+      }
+
+      return { cashAmount, qrisAmount };
     };
 
     savedOrders.forEach((order: any) => {
@@ -166,10 +204,12 @@ export default function Dashboard() {
       
       totalTunaiAllTime += curTunai;
       totalQrisAllTime += curQris;
+      totalKasAllTime += curTunai + curQris;
       
       if (isThisMonthOrder) {
         totalTunaiBulanIni += curTunai;
         totalQrisBulanIni += curQris;
+        totalKasBulanIni += curTunai + curQris;
       }
 
       // Produksi Calculation (Hari Ini)
@@ -220,52 +260,25 @@ export default function Dashboard() {
 
       // Finance Calculation (Hari Ini)
       if (isTodayOrder) {
-        let paid = 0;
+        const paymentAmounts = getOrderPaymentAmounts(order);
+        totalTunai += paymentAmounts.cashAmount;
+        totalQris += paymentAmounts.qrisAmount;
+        totalKasHariIni += paymentAmounts.cashAmount + paymentAmounts.qrisAmount;
+
         if (order.paymentStatus === 'Lunas') {
           if (order.pelunasanAmount) {
-             paid = order.amountPaid || (order.paymentStatusWasBelum ? 0 : order.price / 2);
-             
-             if (order.paymentStatusWasBelum) {
-                // Was Belum then Lunas
-             } else {
-                dpSum += paid;
-             }
-             
-             pelunasanSum += order.pelunasanAmount;
-             
-             if (order.paymentMethod === 'Tunai') totalTunai += paid;
-             if (order.paymentMethod === 'QRIS' || order.paymentMethod === 'Transfer') totalQris += paid;
-             if (order.paymentMethod === 'Kuota Member') {
-               totalMemberRp += Number(order.totalPrice || 0);
-               totalMemberKg += Number(order.usedQuota || 0);
-             }
-             
-             if (order.pelunasanMethod === 'Tunai') totalTunai += order.pelunasanAmount;
-             if (order.pelunasanMethod === 'QRIS' || order.pelunasanMethod === 'Transfer') totalQris += order.pelunasanAmount;
+            const firstPayment = Number(order.amountPaid || (order.paymentStatusWasBelum ? 0 : order.price / 2) || 0);
+            if (!order.paymentStatusWasBelum) dpSum += firstPayment;
+            pelunasanSum += Number(order.pelunasanAmount || 0);
           } else {
-             paid = order.price;
-             lunasSum += paid;
-             
-             if (order.paymentMethod === 'Tunai') totalTunai += paid;
-             if (order.paymentMethod === 'QRIS' || order.paymentMethod === 'Transfer') totalQris += paid;
-             if (order.paymentMethod === 'Kuota Member') {
-               totalMemberRp += Number(order.totalPrice || 0);
-               totalMemberKg += Number(order.usedQuota || 0);
-             }
+            lunasSum += Number(order.price || 0);
           }
         } else if (order.paymentStatus === 'DP') {
-          paid = order.amountPaid || (order.price / 2);
+          const paid = Number(order.amountPaid || (order.price / 2) || 0);
           dpSum += paid;
-          piutangSum += (order.price - paid);
-          
-          if (order.paymentMethod === 'Tunai') totalTunai += paid;
-          if (order.paymentMethod === 'QRIS' || order.paymentMethod === 'Transfer') totalQris += paid;
-          if (order.paymentMethod === 'Kuota Member') {
-            totalMemberRp += Number(order.totalPrice || 0);
-            totalMemberKg += Number(order.usedQuota || 0);
-          }
+          piutangSum += Math.max(0, Number(order.price || 0) - paid);
         } else if (order.paymentStatus === 'Belum') {
-          piutangSum += order.price;
+          piutangSum += Number(order.price || 0);
         }
       }
 
@@ -306,8 +319,12 @@ export default function Dashboard() {
       tunaiAllTime: totalTunaiAllTime,
       qrisAllTime: totalQrisAllTime,
       pengeluaran: totalPengeluaran, 
-      pengeluaranAkumulasi: totalPengeluaranAkumulasi 
+      pengeluaranAkumulasi: totalPengeluaranAkumulasi,
+      totalKasHariIni: totalKasHariIni,
+      totalKasBulanIni: totalKasBulanIni,
+      totalKasAllTime: totalKasAllTime
     });
+    setOmzet({ hariIni: totalKasHariIni, akumulasi: totalKasAllTime });
     setSummary({
       dp: isNaN(dpSum) ? 0 : dpSum,
       lunas: isNaN(lunasSum) ? 0 : lunasSum,
@@ -464,7 +481,7 @@ export default function Dashboard() {
     XLSX.writeFile(workbook, fileName);
   };
 
-  const labaBersih = (finances.tunai + finances.qris) - finances.pengeluaran;
+  const labaBersih = finances.totalKasHariIni - finances.pengeluaran;
 
   const todayISO = new Date().toISOString().split('T')[0];
   const displayExpenses = expenses.filter(e => e.date.substring(0, 7) === todayISO.substring(0, 7));
@@ -609,7 +626,7 @@ export default function Dashboard() {
               <ArrowUpCircle className="w-4 h-4 text-green-500" />
               <span className="text-xs font-bold">Pemasukan Kas</span>
             </div>
-            <p className="text-lg font-black text-slate-800">Rp {(finances.tunai + finances.qris).toLocaleString('id-ID')}</p>
+            <p className="text-lg font-black text-slate-800">Rp {finances.totalKasHariIni.toLocaleString('id-ID')}</p>
           </div>
           
           <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
@@ -748,7 +765,7 @@ export default function Dashboard() {
                 </div>
                 <div className="text-left">
                   <span className="block font-bold text-sm text-slate-800">Detail Pemasukan</span>
-                  <span className="block text-xs font-semibold text-green-600">Rp {(summary.dp + summary.lunas + summary.pelunasan).toLocaleString('id-ID')}</span>
+                  <span className="block text-xs font-semibold text-green-600">Rp {finances.totalKasHariIni.toLocaleString('id-ID')}</span>
                 </div>
               </div>
               {activeAccordion === "pemasukan" ? <ChevronDown className="w-5 h-5 text-slate-400" /> : <ChevronRight className="w-5 h-5 text-slate-400" />}
@@ -1121,6 +1138,11 @@ export default function Dashboard() {
                   <span className="font-black text-slate-800 text-sm">Rp {finances.qris.toLocaleString('id-ID')}</span>
                 </div>
 
+                <div className="flex items-center justify-between p-3 bg-slate-100 rounded-xl border border-slate-200 mt-2">
+                  <div className="text-sm font-semibold text-slate-700">Total Kas Hari Ini</div>
+                  <div className="font-black text-slate-800">Rp {finances.totalKasHariIni.toLocaleString('id-ID')}</div>
+                </div>
+
                 <div className="flex items-center justify-between p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 mt-2">
                   <div className="flex items-center gap-3">
                     <div className="text-xl">💳</div>
@@ -1163,6 +1185,11 @@ export default function Dashboard() {
                   </div>
                   <span className="font-black text-slate-800 text-sm">Rp {finances.qrisBulanIni.toLocaleString('id-ID')}</span>
                 </div>
+
+                <div className="flex items-center justify-between p-3 bg-slate-100 rounded-xl border border-slate-200 mt-2">
+                  <div className="text-sm font-semibold text-slate-700">Total Kas Bulan Ini</div>
+                  <div className="font-black text-slate-800">Rp {finances.totalKasBulanIni.toLocaleString('id-ID')}</div>
+                </div>
               </div>
             </div>
 
@@ -1189,6 +1216,11 @@ export default function Dashboard() {
                     <span className="font-semibold text-slate-700 text-sm">Total QRIS / Transfer Keseluruhan</span>
                   </div>
                   <span className="font-black text-slate-800 text-sm">Rp {finances.qrisAllTime.toLocaleString('id-ID')}</span>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-slate-100 rounded-xl border border-slate-200 mt-2">
+                  <div className="text-sm font-semibold text-slate-700">Total Kas Keseluruhan</div>
+                  <div className="font-black text-slate-800">Rp {finances.totalKasAllTime.toLocaleString('id-ID')}</div>
                 </div>
               </div>
             </div>
