@@ -65,6 +65,7 @@ export default function Kasir() {
   const [discountValue, setDiscountValue] = useState("");
   
   const [draftInvoiceId, setDraftInvoiceId] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [categories, setCategories] = useState<string[]>(["Semua"]);
   const [services, setServices] = useState<any[]>([]);
@@ -483,58 +484,64 @@ export default function Kasir() {
   };
 
   const handleSimpanSaja = async () => {
-    const newOrder = buildDraftOrder();
-    if (!newOrder) return;
-    
-    try {
+     const newOrder = buildDraftOrder();
+     if (!newOrder) return;
+     if (isSubmitting) return;
+
+     setIsSubmitting(true);
+     try {
+      // Try to save to Supabase first. If this fails, do not create a local duplicate order.
+      await addOrder(newOrder);
+
+      // After successful remote save, persist customer locally if needed
       saveCustomerIfNew();
-      
+
+      // Apply member quota locally and attempt remote update (fire-and-forget)
       if (newOrder.isMemberApplied && newOrder.memberId && newOrder.usedQuota > 0) {
         let savedMemberships = JSON.parse(localStorage.getItem('lavora_memberships') || '[]');
         savedMemberships = savedMemberships.map((m: any) => {
-          if (m.id === newOrder.memberId) {
-             const updatedMember = { ...m, remainingQuota: Math.max(0, m.remainingQuota - newOrder.usedQuota) };
-             updateMember(updatedMember.id, updatedMember).catch(() => null);
-             return updatedMember;
-          }
-          return m;
+         if (m.id === newOrder.memberId) {
+           const updatedMember = { ...m, remainingQuota: Math.max(0, m.remainingQuota - newOrder.usedQuota) };
+           updateMember(updatedMember.id, updatedMember).catch(() => null);
+           return updatedMember;
+         }
+         return m;
         });
         localStorage.setItem('lavora_memberships', JSON.stringify(savedMemberships));
         setMemberships(savedMemberships);
       }
-      
+
+      // Persist order locally after remote success
       let existingOrders = JSON.parse(localStorage.getItem('lavora_orders') || '[]');
       existingOrders = cleanOldPhotos(existingOrders);
       let updatedOrders = [newOrder, ...existingOrders];
-      
+
       let saved = false;
       while (!saved && updatedOrders.length > 0) {
-         try {
-            localStorage.setItem('lavora_orders', JSON.stringify(updatedOrders));
-            saved = true;
-         } catch (e: any) {
-            if (e.name === 'QuotaExceededError') {
-               let photoRemoved = false;
-               for (let i = updatedOrders.length - 1; i >= 0; i--) {
-                  if (updatedOrders[i].photoProof && updatedOrders[i].id !== newOrder.id) {
-                     updatedOrders[i].photoProof = null;
-                     photoRemoved = true;
-                     break;
-                  }
-               }
-               if (!photoRemoved) {
-                   alert("Penyimpanan perangkat sangat penuh! Tidak dapat menyimpan foto bukti lagi, harap hapus data lama.");
-                   newOrder.photoProof = null;
-                   updatedOrders[0].photoProof = null;
-               }
-            } else {
-               throw e;
+        try {
+          localStorage.setItem('lavora_orders', JSON.stringify(updatedOrders));
+          saved = true;
+        } catch (e: any) {
+          if (e.name === 'QuotaExceededError') {
+            let photoRemoved = false;
+            for (let i = updatedOrders.length - 1; i >= 0; i--) {
+              if (updatedOrders[i].photoProof && updatedOrders[i].id !== newOrder.id) {
+                updatedOrders[i].photoProof = null;
+                photoRemoved = true;
+                break;
+              }
             }
-         }
+            if (!photoRemoved) {
+               alert("Penyimpanan perangkat sangat penuh! Tidak dapat menyimpan foto bukti lagi, harap hapus data lama.");
+               newOrder.photoProof = null;
+               updatedOrders[0].photoProof = null;
+            }
+          } else {
+            throw e;
+          }
+        }
       }
 
-      await addOrder(newOrder);
-      
       if (paymentStatus !== 'Belum') {
         const finances = JSON.parse(localStorage.getItem('lavora_finances') || '{"tunai":0, "qris":0}');
         if (paymentMethod === 'Tunai') finances.tunai += totalPrice;
@@ -544,10 +551,12 @@ export default function Kasir() {
 
       alert("Transaksi Berhasil Disimpan! 🎉");
       resetForm();
-    } catch (err: any) {
-      alert("Terjadi kesalahan saat menyimpan pesanan: " + err.message);
+     } catch (err: any) {
+      alert('Gagal simpan Supabase: ' + (err?.message || String(err)));
       console.error(err);
-    }
+     } finally {
+      setIsSubmitting(false);
+     }
   };
 
 
@@ -1333,8 +1342,12 @@ Salam, ${laundryName}${customFooter}`;
             </div>
 
             <div className="p-4 bg-white border-t border-slate-200 flex flex-col gap-3 pb-24 z-50 relative">
-              <button onClick={handleSimpanSaja} className="w-full py-3 font-bold text-sm rounded-xl bg-slate-800 text-white shadow-lg flex items-center justify-center gap-2 hover:bg-slate-700 active:scale-95 transition-all">
-                💾 Simpan
+              <button
+                onClick={handleSimpanSaja}
+                disabled={isSubmitting}
+                className={`w-full py-3 font-bold text-sm rounded-xl flex items-center justify-center gap-2 transition-all ${isSubmitting ? 'bg-slate-400 text-slate-200 cursor-not-allowed shadow-none' : 'bg-slate-800 text-white shadow-lg hover:bg-slate-700 active:scale-95'}`}
+              >
+                {isSubmitting ? '⏳ Menyimpan...' : '💾 Simpan'}
               </button>
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={handlePrint} className="py-3 font-bold text-sm rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm flex items-center justify-center gap-2 hover:bg-slate-50 active:scale-95 transition-all">
