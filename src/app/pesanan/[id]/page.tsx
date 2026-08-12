@@ -5,6 +5,7 @@ import { ArrowLeft, MessageCircle, Phone, CheckCircle, ChevronRight, X, User, Pr
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { generatePrintLogoPayload } from "@/utils/escpos";
+import { updateOrder } from "@/lib/supabase";
 
 const operationalSteps = [
   { status: 'Diterima', label: 'Diterima', color: 'bg-slate-50 text-slate-600 border-slate-200' },
@@ -117,22 +118,43 @@ export default function DetailPesanan({ params }: { params: Promise<{ id: string
     loadOrder();
   };
 
-  const confirmPelunasan = () => {
+  const confirmPelunasan = async () => {
     const wasBelum = order.paymentStatus === 'Belum';
+    const finalAmount = Number(order.final_amount ?? order.total_amount ?? order.price ?? 0);
+    const totalAmount = Number(order.total_amount ?? order.price ?? finalAmount);
+    const updatedOrder = {
+      ...order,
+      paymentStatus: 'Lunas',
+      paymentMethod: pelunasanMethod,
+      pelunasanMethod: pelunasanMethod,
+      pelunasanAmount: sisaTagihan,
+      paymentStatusWasBelum: wasBelum,
+      total_amount: totalAmount,
+      final_amount: finalAmount
+    };
+
+    try {
+      await updateOrder(order.id, {
+        paymentStatus: 'Lunas',
+        paymentMethod: pelunasanMethod,
+        pelunasanMethod: pelunasanMethod,
+        pelunasanAmount: sisaTagihan,
+        paymentStatusWasBelum: wasBelum,
+        total_amount: totalAmount,
+        final_amount: finalAmount
+      });
+    } catch (error) {
+      console.error('Gagal memperbarui pelunasan ke Supabase:', error);
+      alert('Gagal menyimpan pelunasan ke Supabase. Data lokal tetap diperbarui.');
+    }
+
     const savedOrders = JSON.parse(localStorage.getItem('lavora_orders') || '[]');
     const updatedOrders = savedOrders.map((o: any) => {
       if (o.id === order.id) {
-        return { 
-          ...o, 
-          paymentStatus: 'Lunas', 
-          pelunasanMethod: pelunasanMethod,
-          pelunasanAmount: sisaTagihan,
-          paymentStatusWasBelum: wasBelum
-        };
+        return updatedOrder;
       }
       return o;
     });
-    
     localStorage.setItem('lavora_orders', JSON.stringify(updatedOrders));
     setIsPaymentSubModalOpen(false);
     loadOrder(); 

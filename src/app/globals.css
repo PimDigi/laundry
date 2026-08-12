@@ -1,53 +1,26 @@
 @import "tailwindcss";
 
-@theme {
-  --color-electric-blue: #0052FF;
-  --color-neon-cyan: #00F0FF;
-  --color-pim-green: #10B981;
-  --color-pim-orange: #F59E0B;
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
 }
 
-:root {
-  --background: var(--color-slate-950);
-  --foreground: var(--color-slate-50);
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
 }
 
 body {
-  background: linear-gradient(180deg, #0B48C5 0%, #052980 50%, #021342 100%) !important;
-  color: #ffffff;
-  min-height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
-  overflow-x: hidden;
-}
-
-/* Base utility overrides or global styles for Glassmorphism */
-.glass-panel {
-  @apply backdrop-blur-xl bg-white/10 border border-white/20 shadow-[0_4px_30px_rgba(0,102,255,0.2)];
-}
-
-.glowing-border {
-  position: relative;
-}
-
-.glowing-border::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(
-    45deg,
-    var(--color-electric-blue),
-    var(--color-neon-cyan),
-    transparent,
-    transparent
-  );
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-.gradient-text {
-  @apply bg-clip-text text-transparent bg-gradient-to-r from-neon-cyan to-electric-blue;
 }

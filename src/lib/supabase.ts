@@ -238,6 +238,47 @@ export const addOrder = async (order: any) => {
   }
 };
 
+export const updateOrder = async (id: string, changes: any) => {
+  const dbChanges: any = {
+    ...changes,
+    total_amount: changes.total_amount ?? changes.totalAmount ?? changes.totalAmount,
+    final_amount: changes.final_amount ?? changes.finalAmount,
+    payment_method: changes.paymentMethod ?? changes.payment_method
+  };
+
+  if (!HAS_SUPABASE) {
+    const current = readLocal("lavora_orders", [] as any[]);
+    const updated = current.map(item => item.id === id ? { ...item, ...changes } : item);
+    writeLocal("lavora_orders", updated);
+    return updated.find(item => item.id === id) ?? null;
+  }
+
+  try {
+    const { data, error } = await supabase.from("orders").update(dbChanges as any).eq("id", id).select().maybeSingle();
+    if (error) {
+      alert("Gagal memperbarui order di Supabase: " + error.message);
+      const current = readLocal("lavora_orders", [] as any[]);
+      const updated = current.map(item => item.id === id ? { ...item, ...changes } : item);
+      writeLocal("lavora_orders", updated);
+      return updated.find(item => item.id === id) ?? null;
+    }
+
+    const normalized = data ? mapOrder(data) : null;
+    if (normalized) {
+      const current = readLocal("lavora_orders", [] as any[]);
+      const next = current.map(item => item.id === id ? normalized : item);
+      writeLocal("lavora_orders", next);
+    }
+    return normalized;
+  } catch (err: any) {
+    alert("Gagal memperbarui order di Supabase: " + (err?.message || err));
+    const current = readLocal("lavora_orders", [] as any[]);
+    const updated = current.map(item => item.id === id ? { ...item, ...changes } : item);
+    writeLocal("lavora_orders", updated);
+    return updated.find(item => item.id === id) ?? null;
+  }
+};
+
 export const fetchMembers = async () =>
   safeFetch<any>(
     "members",
