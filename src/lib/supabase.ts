@@ -94,7 +94,7 @@ const safeUpdate = async <T>(
   }
 
   try {
-    const { data, error } = await supabase.from(table).update(changes).eq("id", id).select().maybeSingle();
+    const { data, error } = await supabase.from(table).update(changes as any).eq("id", id).select().maybeSingle();
     if (error) throw error;
     const updated = data ? mapItem(data) : null;
     if (updated) {
