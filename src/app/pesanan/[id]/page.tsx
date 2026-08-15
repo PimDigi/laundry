@@ -122,6 +122,8 @@ export default function DetailPesanan({ params }: { params: Promise<{ id: string
     const wasBelum = order.paymentStatus === 'Belum';
     const finalAmount = Number(order.final_amount ?? order.total_amount ?? order.price ?? 0);
     const totalAmount = Number(order.total_amount ?? order.price ?? finalAmount);
+    const normalizedPelunasanMethod = String(pelunasanMethod || 'Tunai').trim().toLowerCase();
+    const paymentMethodValue = normalizedPelunasanMethod === 'tunai' ? 'cash' : normalizedPelunasanMethod === 'qris' ? 'qris' : normalizedPelunasanMethod;
     const updatedOrder = {
       ...order,
       paymentStatus: 'Lunas',
@@ -130,13 +132,23 @@ export default function DetailPesanan({ params }: { params: Promise<{ id: string
       pelunasanAmount: sisaTagihan,
       paymentStatusWasBelum: wasBelum,
       total_amount: totalAmount,
-      final_amount: finalAmount
+      final_amount: finalAmount,
+      payment_status: 'paid',
+      payment_method: paymentMethodValue,
+      pelunasan_method: paymentMethodValue,
+      pelunasan_amount: Number(sisaTagihan || 0),
+      sisa_tagihan: 0,
     };
 
     try {
       await updateOrder(order.id, {
         payment_status: 'paid',
-        payment_method: pelunasanMethod,
+        payment_method: paymentMethodValue,
+        pelunasan_method: paymentMethodValue,
+        pelunasan_amount: Number(sisaTagihan || 0),
+        sisa_tagihan: 0,
+        paymentStatus: 'Lunas',
+        paymentMethod: pelunasanMethod,
         pelunasanMethod: pelunasanMethod,
         pelunasanAmount: sisaTagihan,
         paymentStatusWasBelum: wasBelum,
@@ -156,6 +168,7 @@ export default function DetailPesanan({ params }: { params: Promise<{ id: string
       return o;
     });
     localStorage.setItem('lavora_orders', JSON.stringify(updatedOrders));
+    window.dispatchEvent(new Event('lavora-orders-updated'));
     setIsPaymentSubModalOpen(false);
     loadOrder(); 
   };

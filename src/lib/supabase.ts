@@ -240,14 +240,26 @@ export const addOrder = async (order: any) => {
 };
 
 export const updateOrder = async (id: string, changes: any) => {
-  const paymentMethod = changes.paymentMethod ?? changes.payment_method;
+  const normalizeDbMethod = (value: any) => {
+    const method = String(value ?? "").trim().toLowerCase();
+    if (method === "tunai" || method === "cash") return "cash";
+    if (method === "qris" || method === "transfer" || method === "transfer-bank") return "qris";
+    return method || "cash";
+  };
+
+  const paymentMethod = changes.paymentMethod ?? changes.payment_method ?? changes.pelunasanMethod ?? changes.pelunasan_method;
   const paymentStatus = changes.paymentStatus ?? changes.payment_status;
+  const pelunasanAmount = changes.pelunasan_amount ?? changes.pelunasanAmount ?? 0;
+  const sisaTagihan = changes.sisa_tagihan ?? changes.sisaTagihan ?? 0;
 
   const dbChanges: any = {
     ...changes,
     total_amount: changes.total_amount ?? changes.totalAmount ?? changes.totalAmount,
     final_amount: changes.final_amount ?? changes.finalAmount,
-    payment_method: paymentMethod,
+    payment_method: normalizeDbMethod(paymentMethod),
+    pelunasan_method: normalizeDbMethod(changes.pelunasan_method ?? changes.pelunasanMethod ?? paymentMethod),
+    pelunasan_amount: Number(pelunasanAmount || 0),
+    sisa_tagihan: Number(sisaTagihan || 0),
     payment_status: (() => {
       if (paymentStatus === "Lunas" || paymentStatus === "paid") return "paid";
       if (paymentStatus === "DP" || paymentStatus === "partial") return "partial";
@@ -260,6 +272,8 @@ export const updateOrder = async (id: string, changes: any) => {
   delete dbChanges.paymentStatus;
   delete dbChanges.pelunasanMethod;
   delete dbChanges.paymentStatusWasBelum;
+  delete dbChanges.pelunasanAmount;
+  delete dbChanges.sisaTagihan;
 
   if (!HAS_SUPABASE) {
     const current = readLocal("lavora_orders", [] as any[]);

@@ -377,6 +377,15 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadData();
+
+    const handleOrdersUpdated = () => {
+      loadData();
+    };
+
+    window.addEventListener('lavora-orders-updated', handleOrdersUpdated);
+    return () => {
+      window.removeEventListener('lavora-orders-updated', handleOrdersUpdated);
+    };
   }, []);
 
   const openAddModal = () => {
