@@ -148,7 +148,7 @@ export default function Dashboard() {
       const total = getOrderTotalValue(order);
       const paymentStatus = normalizePaymentStatus(order);
       if (paymentStatus === "paid") return 0;
-      if (paymentStatus === "partial") return Math.max(0, total - Number(order.amountPaid ?? order.dpAmount ?? 0));
+      if (paymentStatus === "partial") return Math.max(0, total - Number(order.amountPaid || order.dpAmount || 0));
       return total;
     };
 
@@ -156,11 +156,11 @@ export default function Dashboard() {
       const total = getOrderTotalValue(order);
       const paymentStatus = normalizePaymentStatus(order);
       if (paymentStatus === "paid") {
-        const pelunasanAmount = Number(order.pelunasan_amount ?? order.pelunasanAmount ?? 0);
-        const firstPayment = Number(order.amountPaid ?? (order.paymentStatusWasBelum ? 0 : total / 2) ?? 0);
+        const pelunasanAmount = Number(order.pelunasan_amount || order.pelunasanAmount || 0);
+        const firstPayment = Number(order.amountPaid || (order.paymentStatusWasBelum ? 0 : total / 2));
         return pelunasanAmount > 0 ? firstPayment + pelunasanAmount : total;
       }
-      if (paymentStatus === "partial") return Number(order.amountPaid ?? order.dpAmount ?? (total / 2) ?? 0);
+      if (paymentStatus === "partial") return Number(order.amountPaid || order.dpAmount || total / 2);
       return 0;
     };
 
@@ -177,10 +177,10 @@ export default function Dashboard() {
       };
 
       if (paymentStatus === "paid") {
-        const firstPayment = Number(order.amountPaid ?? (order.paymentStatusWasBelum ? 0 : total / 2) ?? 0);
-        const pelunasanAmount = Number(order.pelunasan_amount ?? order.pelunasanAmount ?? 0);
-        const initialMethod = order.payment_method ?? order.paymentMethod ?? "cash";
-        const pelunasanMethod = order.pelunasan_method ?? order.pelunasanMethod ?? initialMethod;
+        const firstPayment = Number(order.amountPaid || (order.paymentStatusWasBelum ? 0 : total / 2));
+        const pelunasanAmount = Number(order.pelunasan_amount || order.pelunasanAmount || 0);
+        const initialMethod = order.payment_method || order.paymentMethod || "cash";
+        const pelunasanMethod = order.pelunasan_method || order.pelunasanMethod || initialMethod;
 
         if (pelunasanAmount > 0) {
           addMethod(initialMethod, firstPayment);
@@ -189,7 +189,7 @@ export default function Dashboard() {
           addMethod(initialMethod, total);
         }
       } else if (paymentStatus === "partial") {
-        addMethod(order.payment_method ?? order.paymentMethod ?? "cash", Number(order.amountPaid ?? order.dpAmount ?? (total / 2) ?? 0));
+        addMethod(order.payment_method || order.paymentMethod || "cash", Number(order.amountPaid || order.dpAmount || total / 2 || 0));
       }
 
       return { cash, qris };
@@ -283,8 +283,8 @@ export default function Dashboard() {
 
         if (paymentStatus === 'paid') {
           const total = getOrderTotalValue(order);
-          const pelunasanAmount = Number(order.pelunasan_amount ?? order.pelunasanAmount ?? 0);
-          const firstPayment = Number(order.amountPaid ?? (order.paymentStatusWasBelum ? 0 : total / 2) ?? 0);
+          const pelunasanAmount = Number(order.pelunasan_amount || order.pelunasanAmount || 0);
+          const firstPayment = Number(order.amountPaid || (order.paymentStatusWasBelum ? 0 : total / 2));
           if (pelunasanAmount > 0) {
             if (!order.paymentStatusWasBelum) dpSum += firstPayment;
             pelunasanSum += pelunasanAmount;
