@@ -127,9 +127,72 @@ export default function Dashboard() {
     let kgSum = 0;
     let pcsSum = 0;
 
+    const normalizePaymentStatus = (order: any) => {
+      const raw = String(order?.payment_status ?? order?.paymentStatus ?? order?.status ?? "unpaid").trim().toLowerCase();
+      if (["paid", "lunas", "sudah lunas", "terbayar"].includes(raw)) return "paid";
+      if (["partial", "dp", "down payment", "dibayar sebagian", "bayar sebagian", "sebagian"].includes(raw)) return "partial";
+      return "unpaid";
+    };
+
     const normalizePaymentMethod = (value: any) => {
       if (!value) return "";
-      return String(value).toLowerCase();
+      const normalized = String(value).trim().toLowerCase();
+      if (["tunai", "cash", "uang tunai"].includes(normalized)) return "cash";
+      if (["qris", "transfer", "transfer-bank", "bank transfer", "e-wallet"].includes(normalized)) return "qris";
+      return normalized;
+    };
+
+    const getOrderTotalValue = (order: any) => Number(order.final_amount ?? order.total_amount ?? order.payload?.total_amount ?? order.price ?? 0) || 0;
+
+    const getOutstandingAmount = (order: any) => {
+      const total = getOrderTotalValue(order);
+      const paymentStatus = normalizePaymentStatus(order);
+      if (paymentStatus === "paid") return 0;
+      if (paymentStatus === "partial") return Math.max(0, total - Number(order.amountPaid ?? order.dpAmount ?? 0));
+      return total;
+    };
+
+    const getReceivedAmount = (order: any) => {
+      const total = getOrderTotalValue(order);
+      const paymentStatus = normalizePaymentStatus(order);
+      if (paymentStatus === "paid") {
+        const pelunasanAmount = Number(order.pelunasan_amount ?? order.pelunasanAmount ?? 0);
+        const firstPayment = Number(order.amountPaid ?? (order.paymentStatusWasBelum ? 0 : total / 2) ?? 0);
+        return pelunasanAmount > 0 ? firstPayment + pelunasanAmount : total;
+      }
+      if (paymentStatus === "partial") return Number(order.amountPaid ?? order.dpAmount ?? (total / 2) ?? 0);
+      return 0;
+    };
+
+    const getCashSplit = (order: any) => {
+      const paymentStatus = normalizePaymentStatus(order);
+      const total = getOrderTotalValue(order);
+      let cash = 0;
+      let qris = 0;
+
+      const addMethod = (method: string, amount: number) => {
+        const normalized = normalizePaymentMethod(method);
+        if (normalized === "cash") cash += amount;
+        if (normalized === "qris") qris += amount;
+      };
+
+      if (paymentStatus === "paid") {
+        const firstPayment = Number(order.amountPaid ?? (order.paymentStatusWasBelum ? 0 : total / 2) ?? 0);
+        const pelunasanAmount = Number(order.pelunasan_amount ?? order.pelunasanAmount ?? 0);
+        const initialMethod = order.payment_method ?? order.paymentMethod ?? "cash";
+        const pelunasanMethod = order.pelunasan_method ?? order.pelunasanMethod ?? initialMethod;
+
+        if (pelunasanAmount > 0) {
+          addMethod(initialMethod, firstPayment);
+          addMethod(pelunasanMethod, pelunasanAmount);
+        } else {
+          addMethod(initialMethod, total);
+        }
+      } else if (paymentStatus === "partial") {
+        addMethod(order.payment_method ?? order.paymentMethod ?? "cash", Number(order.amountPaid ?? order.dpAmount ?? (total / 2) ?? 0));
+      }
+
+      return { cash, qris };
     };
 
     const isToday = (dateString: string | number) => {
@@ -146,62 +209,16 @@ export default function Dashboard() {
       return itemDate.getMonth() === todayDate.getMonth() && itemDate.getFullYear() === todayDate.getFullYear();
     };
 
-    const getOrderPaymentAmounts = (order: any) => {
-      const paymentMethod = normalizePaymentMethod(order.paymentMethod);
-      const pelunasanMethod = normalizePaymentMethod(order.pelunasanMethod);
-      let cashAmount = 0;
-      let qrisAmount = 0;
-
-      const addAmount = (method: string, amount: number) => {
-        if (amount <= 0) return;
-        if (method === 'tunai' || method === 'cash') cashAmount += amount;
-        if (method === 'qris' || method === 'transfer') qrisAmount += amount;
-      };
-
-      if (order.paymentStatus === 'Lunas') {
-        if (order.pelunasanAmount) {
-          const firstPayment = Number(order.amountPaid || (order.paymentStatusWasBelum ? 0 : order.price / 2) || 0);
-          addAmount(paymentMethod, firstPayment);
-          addAmount(pelunasanMethod, Number(order.pelunasanAmount || 0));
-        } else {
-          addAmount(paymentMethod, Number(order.price || 0));
-        }
-      } else if (order.paymentStatus === 'DP') {
-        addAmount(paymentMethod, Number(order.amountPaid || (order.price / 2) || 0));
-      }
-
-      return { cashAmount, qrisAmount };
-    };
-
     savedOrders.forEach((order: any) => {
       const opStatus = order.operationalStatus || order.status || 'Diterima';
       if (opStatus === 'Dibatalkan') return;
 
       const isTodayOrder = isToday(order.createdAt || order.date);
       const isThisMonthOrder = isThisMonth(order.createdAt || order.date);
+      const paymentStatus = normalizePaymentStatus(order);
+      const { cash: curTunai, qris: curQris } = getCashSplit(order);
+      const receivedAmount = getReceivedAmount(order);
 
-      // Hitung Keseluruhan & Bulan Ini
-      let curTunai = 0;
-      let curQris = 0;
-      if (order.paymentStatus === 'Lunas') {
-        if (order.pelunasanAmount) {
-          const p = order.amountPaid || (order.paymentStatusWasBelum ? 0 : order.price / 2);
-          if (order.paymentMethod === 'Tunai') curTunai += p;
-          if (order.paymentMethod === 'QRIS' || order.paymentMethod === 'Transfer') curQris += p;
-          
-          if (order.pelunasanMethod === 'Tunai') curTunai += order.pelunasanAmount;
-          if (order.pelunasanMethod === 'QRIS' || order.pelunasanMethod === 'Transfer') curQris += order.pelunasanAmount;
-        } else {
-          const p = order.price;
-          if (order.paymentMethod === 'Tunai') curTunai += p;
-          if (order.paymentMethod === 'QRIS' || order.paymentMethod === 'Transfer') curQris += p;
-        }
-      } else if (order.paymentStatus === 'DP') {
-        const p = order.amountPaid || (order.price / 2);
-        if (order.paymentMethod === 'Tunai') curTunai += p;
-        if (order.paymentMethod === 'QRIS' || order.paymentMethod === 'Transfer') curQris += p;
-      }
-      
       totalTunaiAllTime += curTunai;
       totalQrisAllTime += curQris;
       totalKasAllTime += curTunai + curQris;
@@ -260,26 +277,29 @@ export default function Dashboard() {
 
       // Finance Calculation (Hari Ini)
       if (isTodayOrder) {
-        const paymentAmounts = getOrderPaymentAmounts(order);
-        totalTunai += paymentAmounts.cashAmount;
-        totalQris += paymentAmounts.qrisAmount;
-        totalKasHariIni += paymentAmounts.cashAmount + paymentAmounts.qrisAmount;
+        totalTunai += curTunai;
+        totalQris += curQris;
+        totalKasHariIni += curTunai + curQris;
 
-        if (order.paymentStatus === 'Lunas') {
-          if (order.pelunasanAmount) {
-            const firstPayment = Number(order.amountPaid || (order.paymentStatusWasBelum ? 0 : order.price / 2) || 0);
+        if (paymentStatus === 'paid') {
+          const total = getOrderTotalValue(order);
+          const pelunasanAmount = Number(order.pelunasan_amount ?? order.pelunasanAmount ?? 0);
+          const firstPayment = Number(order.amountPaid ?? (order.paymentStatusWasBelum ? 0 : total / 2) ?? 0);
+          if (pelunasanAmount > 0) {
             if (!order.paymentStatusWasBelum) dpSum += firstPayment;
-            pelunasanSum += Number(order.pelunasanAmount || 0);
+            pelunasanSum += pelunasanAmount;
           } else {
-            lunasSum += Number(order.price || 0);
+            lunasSum += total;
           }
-        } else if (order.paymentStatus === 'DP') {
-          const paid = Number(order.amountPaid || (order.price / 2) || 0);
+        } else if (paymentStatus === 'partial') {
+          const paid = Number(order.amountPaid ?? order.dpAmount ?? 0);
           dpSum += paid;
-          piutangSum += Math.max(0, Number(order.price || 0) - paid);
-        } else if (order.paymentStatus === 'Belum') {
-          piutangSum += Number(order.price || 0);
+          piutangSum += Math.max(0, getOrderTotalValue(order) - paid);
+        } else if (paymentStatus === 'unpaid') {
+          piutangSum += getOutstandingAmount(order);
         }
+      } else if (paymentStatus !== 'paid') {
+        piutangSum += getOutstandingAmount(order);
       }
 
       // Deadline Calculation
@@ -359,7 +379,7 @@ export default function Dashboard() {
       if (opStatus === 'Dibatalkan') return;
 
       const isTodayOrder = isToday(order.createdAt || order.date);
-      const orderRevenue = Number(order.final_amount ?? order.total_amount ?? order.payload?.total_amount ?? order.price ?? 0) || 0;
+      const orderRevenue = getReceivedAmount(order);
 
       if (isTodayOrder) {
         omzetHariIni += orderRevenue;
