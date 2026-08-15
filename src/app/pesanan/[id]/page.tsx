@@ -135,8 +135,8 @@ export default function DetailPesanan({ params }: { params: Promise<{ id: string
 
     try {
       await updateOrder(order.id, {
-        paymentStatus: 'Lunas',
-        paymentMethod: pelunasanMethod,
+        payment_status: 'paid',
+        payment_method: pelunasanMethod,
         pelunasanMethod: pelunasanMethod,
         pelunasanAmount: sisaTagihan,
         paymentStatusWasBelum: wasBelum,

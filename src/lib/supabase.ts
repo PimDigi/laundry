@@ -127,6 +127,7 @@ const mapOrder = (row: any) => {
     customerName: row.customer_name,
     status: row.status,
     paymentMethod: row.payment_method,
+    paymentStatus: row.payment_status ?? row.paymentStatus ?? "Belum",
     subtotal: row.subtotal,
     discount: row.discount,
     total: row.total,
@@ -239,12 +240,26 @@ export const addOrder = async (order: any) => {
 };
 
 export const updateOrder = async (id: string, changes: any) => {
+  const paymentMethod = changes.paymentMethod ?? changes.payment_method;
+  const paymentStatus = changes.paymentStatus ?? changes.payment_status;
+
   const dbChanges: any = {
     ...changes,
     total_amount: changes.total_amount ?? changes.totalAmount ?? changes.totalAmount,
     final_amount: changes.final_amount ?? changes.finalAmount,
-    payment_method: changes.paymentMethod ?? changes.payment_method
+    payment_method: paymentMethod,
+    payment_status: (() => {
+      if (paymentStatus === "Lunas" || paymentStatus === "paid") return "paid";
+      if (paymentStatus === "DP" || paymentStatus === "partial") return "partial";
+      if (paymentStatus === "Belum" || paymentStatus === "unpaid") return "unpaid";
+      return paymentStatus;
+    })(),
   };
+
+  delete dbChanges.paymentMethod;
+  delete dbChanges.paymentStatus;
+  delete dbChanges.pelunasanMethod;
+  delete dbChanges.paymentStatusWasBelum;
 
   if (!HAS_SUPABASE) {
     const current = readLocal("lavora_orders", [] as any[]);
