@@ -124,37 +124,43 @@ export default function DetailPesanan({ params }: { params: Promise<{ id: string
     const totalAmount = Number(order.total_amount ?? order.price ?? finalAmount);
     const normalizedPelunasanMethod = String(pelunasanMethod || 'Tunai').trim().toLowerCase();
     const paymentMethodValue = normalizedPelunasanMethod === 'tunai' ? 'cash' : normalizedPelunasanMethod === 'qris' ? 'qris' : normalizedPelunasanMethod;
+    const amountPaid = Number(sisaTagihan || 0);
     const updatedOrder = {
       ...order,
+      status: 'paid',
       paymentStatus: 'Lunas',
-      paymentMethod: pelunasanMethod,
-      pelunasanMethod: pelunasanMethod,
-      pelunasanAmount: sisaTagihan,
+      payment_status: 'paid',
+      paymentMethod: paymentMethodValue,
+      payment_method: paymentMethodValue,
+      pelunasanMethod: paymentMethodValue,
+      pelunasan_method: paymentMethodValue,
+      pelunasanAmount: amountPaid,
+      pelunasan_amount: amountPaid,
+      sisa_tagihan: 0,
       paymentStatusWasBelum: wasBelum,
       total_amount: totalAmount,
-      final_amount: finalAmount,
-      payment_status: 'paid',
-      payment_method: paymentMethodValue,
-      pelunasan_method: paymentMethodValue,
-      pelunasan_amount: Number(sisaTagihan || 0),
-      sisa_tagihan: 0,
+      final_amount: finalAmount
     };
 
     try {
-      await updateOrder(order.id, {
+      const result = await updateOrder(order.id, {
+        status: 'paid',
         payment_status: 'paid',
         payment_method: paymentMethodValue,
         pelunasan_method: paymentMethodValue,
-        pelunasan_amount: Number(sisaTagihan || 0),
+        pelunasan_amount: amountPaid,
         sisa_tagihan: 0,
-        paymentStatus: 'Lunas',
-        paymentMethod: pelunasanMethod,
-        pelunasanMethod: pelunasanMethod,
-        pelunasanAmount: sisaTagihan,
         paymentStatusWasBelum: wasBelum,
         total_amount: totalAmount,
-        final_amount: finalAmount
+        final_amount: finalAmount,
       });
+
+      if (result) {
+        const savedOrders = JSON.parse(localStorage.getItem('lavora_orders') || '[]');
+        const updatedOrders = savedOrders.map((o: any) => o.id === order.id ? { ...o, ...updatedOrder } : o);
+        localStorage.setItem('lavora_orders', JSON.stringify(updatedOrders));
+        window.dispatchEvent(new Event('lavora-orders-updated'));
+      }
     } catch (error) {
       console.error('Gagal memperbarui pelunasan ke Supabase:', error);
       alert('Gagal menyimpan pelunasan ke Supabase. Data lokal tetap diperbarui.');
@@ -170,7 +176,7 @@ export default function DetailPesanan({ params }: { params: Promise<{ id: string
     localStorage.setItem('lavora_orders', JSON.stringify(updatedOrders));
     window.dispatchEvent(new Event('lavora-orders-updated'));
     setIsPaymentSubModalOpen(false);
-    loadOrder(); 
+    loadOrder();
   };
 
   const confirmCancel = () => {

@@ -127,6 +127,11 @@ export default function Dashboard() {
     let kgSum = 0;
     let pcsSum = 0;
 
+    const isPaidStatus = (order: any) => {
+      const status = String(order?.payment_status ?? order?.paymentStatus ?? order?.status ?? "unpaid").trim().toLowerCase();
+      return ["paid", "lunas", "sudah lunas", "terbayar"].includes(status);
+    };
+
     const normalizePaymentStatus = (order: any) => {
       const raw = String(order?.payment_status ?? order?.paymentStatus ?? order?.status ?? "unpaid").trim().toLowerCase();
       if (["paid", "lunas", "sudah lunas", "terbayar"].includes(raw)) return "paid";
@@ -217,7 +222,7 @@ export default function Dashboard() {
       const isThisMonthOrder = isThisMonth(order.createdAt || order.date);
       const paymentStatus = normalizePaymentStatus(order);
       const { cash: curTunai, qris: curQris } = getCashSplit(order);
-      const receivedAmount = getReceivedAmount(order);
+      const paidToday = isPaidStatus(order) && isTodayOrder;
 
       totalTunaiAllTime += curTunai;
       totalQrisAllTime += curQris;
@@ -279,7 +284,9 @@ export default function Dashboard() {
       if (isTodayOrder) {
         totalTunai += curTunai;
         totalQris += curQris;
-        totalKasHariIni += curTunai + curQris;
+        if (paidToday) {
+          totalKasHariIni += getReceivedAmount(order);
+        }
 
         if (paymentStatus === 'paid') {
           const total = getOrderTotalValue(order);
@@ -292,7 +299,7 @@ export default function Dashboard() {
             lunasSum += total;
           }
         } else if (paymentStatus === 'partial') {
-          const paid = Number(order.amountPaid ?? order.dpAmount ?? 0);
+          const paid = Number(order.amountPaid || order.dpAmount || 0);
           dpSum += paid;
           piutangSum += Math.max(0, getOrderTotalValue(order) - paid);
         } else if (paymentStatus === 'unpaid') {

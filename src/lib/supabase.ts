@@ -247,25 +247,30 @@ export const updateOrder = async (id: string, changes: any) => {
     return method || "cash";
   };
 
+  const normalizeDbStatus = (value: any) => {
+    const status = String(value ?? "").trim().toLowerCase();
+    if (["lunas", "paid"].includes(status)) return "paid";
+    if (["dp", "partial", "down payment", "dibayar sebagian"].includes(status)) return "partial";
+    if (["belum", "unpaid", "belum bayar", "waiting"].includes(status)) return "unpaid";
+    return status || "unpaid";
+  };
+
   const paymentMethod = changes.paymentMethod ?? changes.payment_method ?? changes.pelunasanMethod ?? changes.pelunasan_method;
-  const paymentStatus = changes.paymentStatus ?? changes.payment_status;
+  const paymentStatus = changes.paymentStatus ?? changes.payment_status ?? changes.status;
   const pelunasanAmount = changes.pelunasan_amount ?? changes.pelunasanAmount ?? 0;
   const sisaTagihan = changes.sisa_tagihan ?? changes.sisaTagihan ?? 0;
+  const normalizedPaymentStatus = normalizeDbStatus(paymentStatus);
 
   const dbChanges: any = {
     ...changes,
+    status: normalizedPaymentStatus,
     total_amount: changes.total_amount ?? changes.totalAmount ?? changes.totalAmount,
     final_amount: changes.final_amount ?? changes.finalAmount,
     payment_method: normalizeDbMethod(paymentMethod),
     pelunasan_method: normalizeDbMethod(changes.pelunasan_method ?? changes.pelunasanMethod ?? paymentMethod),
     pelunasan_amount: Number(pelunasanAmount || 0),
     sisa_tagihan: Number(sisaTagihan || 0),
-    payment_status: (() => {
-      if (paymentStatus === "Lunas" || paymentStatus === "paid") return "paid";
-      if (paymentStatus === "DP" || paymentStatus === "partial") return "partial";
-      if (paymentStatus === "Belum" || paymentStatus === "unpaid") return "unpaid";
-      return paymentStatus;
-    })(),
+    payment_status: normalizedPaymentStatus,
   };
 
   delete dbChanges.paymentMethod;

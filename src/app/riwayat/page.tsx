@@ -31,46 +31,48 @@ function RiwayatContent() {
   };
 
   useEffect(() => {
-    const savedOrders = JSON.parse(localStorage.getItem('lavora_orders') || '[]');
-    
-    // Calculate counts
-    const newCounts = { Antrian: 0, Proses: 0, Selesai: 0, Dibatalkan: 0 };
-    savedOrders.forEach((o: any) => {
-      const opStatus = o.operationalStatus || (o.status === 'Baru' ? 'Diterima' : o.status) || 'Diterima';
-      const cat = getCategoryForOpStatus(opStatus);
-      if (newCounts[cat as keyof typeof newCounts] !== undefined) {
-         newCounts[cat as keyof typeof newCounts]++;
+    const syncOrders = () => {
+      const savedOrders = JSON.parse(localStorage.getItem('lavora_orders') || '[]');
+
+      const newCounts = { Antrian: 0, Proses: 0, Selesai: 0, Dibatalkan: 0 };
+      savedOrders.forEach((o: any) => {
+        const opStatus = o.operationalStatus || (o.status === 'Baru' ? 'Diterima' : o.status) || 'Diterima';
+        const cat = getCategoryForOpStatus(opStatus);
+        if (newCounts[cat as keyof typeof newCounts] !== undefined) {
+           newCounts[cat as keyof typeof newCounts]++;
+        }
+      });
+      setCounts(newCounts);
+
+      let filteredOrders = savedOrders;
+
+      if (filterParam === 'h-0') {
+        filteredOrders = savedOrders.filter((order: any) => {
+          const isExpress = order.service?.toLowerCase().includes('express') || order.service?.toLowerCase().includes('kilat') || order.service?.toLowerCase().includes('24 jam');
+          const opStatus = order.operationalStatus || order.status || 'Diterima';
+          return opStatus !== 'Selesai' && opStatus !== 'Diambil' && opStatus !== 'Dibatalkan' && isExpress;
+        });
+      } else if (filterParam === 'h-1') {
+        filteredOrders = savedOrders.filter((order: any) => {
+          const isExpress = order.service?.toLowerCase().includes('express') || order.service?.toLowerCase().includes('kilat') || order.service?.toLowerCase().includes('24 jam');
+          const opStatus = order.operationalStatus || order.status || 'Diterima';
+          return opStatus !== 'Selesai' && opStatus !== 'Diambil' && opStatus !== 'Dibatalkan' && !isExpress;
+        });
       }
-    });
-    setCounts(newCounts);
 
-    let filteredOrders = savedOrders;
-
-    if (filterParam === 'h-0') {
-      filteredOrders = savedOrders.filter((order: any) => {
-        const isExpress = order.service?.toLowerCase().includes('express') || order.service?.toLowerCase().includes('kilat') || order.service?.toLowerCase().includes('24 jam');
-        const opStatus = order.operationalStatus || order.status || 'Diterima';
-        return opStatus !== 'Selesai' && opStatus !== 'Diambil' && opStatus !== 'Dibatalkan' && isExpress;
-      });
-      if (activeTab === 'Antrian' && !searchParams.get('tab_changed')) {
-        // Just let it show all for deadline, or override activeTab
+      if (!filterParam || searchParams.get('tab_changed')) {
+        filteredOrders = savedOrders.filter((order: any) => {
+           const opStatus = order.operationalStatus || (order.status === 'Baru' ? 'Diterima' : order.status) || 'Diterima';
+           return getCategoryForOpStatus(opStatus) === activeTab;
+        });
       }
-    } else if (filterParam === 'h-1') {
-      filteredOrders = savedOrders.filter((order: any) => {
-        const isExpress = order.service?.toLowerCase().includes('express') || order.service?.toLowerCase().includes('kilat') || order.service?.toLowerCase().includes('24 jam');
-        const opStatus = order.operationalStatus || order.status || 'Diterima';
-        return opStatus !== 'Selesai' && opStatus !== 'Diambil' && opStatus !== 'Dibatalkan' && !isExpress;
-      });
-    }
 
-    if (!filterParam || searchParams.get('tab_changed')) {
-      filteredOrders = savedOrders.filter((order: any) => {
-         const opStatus = order.operationalStatus || (order.status === 'Baru' ? 'Diterima' : order.status) || 'Diterima';
-         return getCategoryForOpStatus(opStatus) === activeTab;
-      });
-    }
+      setOrders(filteredOrders);
+    };
 
-    setOrders(filteredOrders);
+    syncOrders();
+    window.addEventListener('lavora-orders-updated', syncOrders);
+    return () => window.removeEventListener('lavora-orders-updated', syncOrders);
   }, [filterParam, activeTab, searchParams]);
 
   return (
@@ -116,7 +118,7 @@ function RiwayatContent() {
           {orders.map((order, idx) => {
             const displayAmount = Number(order.final_amount ?? order.total_amount ?? order.payload?.total_amount ?? order.price ?? 0);
             const opStatus = order.operationalStatus || (order.status === 'Baru' ? 'Diterima' : order.status) || 'Diterima';
-            const isLunas = order.paymentStatus === 'Lunas';
+            const isLunas = order.payment_status === 'paid' || order.status === 'paid' || order.paymentStatus === 'Lunas';
             const isExpress = order.service?.toLowerCase().includes('express') || order.service?.toLowerCase().includes('kilat') || order.service?.toLowerCase().includes('24 jam');
             
             // Dummy estSelesai based on created date + duration
@@ -173,10 +175,9 @@ function RiwayatContent() {
                     
                     <div className="flex flex-wrap items-center gap-1.5 mt-2">
                       <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md border ${
-                        isLunas ? 'bg-green-50 text-green-600 border-green-200' : 
-                        order.paymentStatus === 'DP' ? 'bg-yellow-50 text-yellow-600 border-yellow-200' : 'bg-red-50 text-red-600 border-red-200'
+                        isLunas ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'
                       }`}>
-                        {order.paymentStatus === 'Belum' ? 'Belum Bayar' : (order.paymentStatus === 'DP' ? 'DP' : 'Lunas')}
+                        {(order.payment_status === 'paid' || order.status === 'paid' || order.paymentStatus === 'Lunas') ? 'Lunas' : 'Belum Bayar'}
                       </span>
                       
                       {/* Operational status embedded as small text */}
